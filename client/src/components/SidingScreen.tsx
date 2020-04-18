@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { ClientSidingState, ErrorResponse } from "../../../sharedTypes";
 import { SocketRef, Role } from "../App";
-import { Flex, Text, ListItem, ButtonGroup, Button } from "@chakra-ui/core";
+import { Flex, Text, ListItem, Button } from "@chakra-ui/core";
 import RoomCodeBox from "./RoomCodeBox";
 
 interface Props {
@@ -18,9 +18,15 @@ export default function SidingScreen(props: Props) {
     });
   };
 
+  const startTrial = () => {
+    props.socketRef.current?.emit("trial", (error: ErrorResponse) => {
+      setError(error.message);
+    });
+  };
+
   let helperElement: React.ReactNode;
 
-  const { ownName, accusedName, judgeName, ownRole } = props.state;
+  const { ownName, accusedName, judgeName, ownRole, isHost } = props.state;
 
   if (ownName === accusedName) {
     helperElement = (
@@ -84,6 +90,11 @@ export default function SidingScreen(props: Props) {
       </Flex>
       <Flex flexDirection="column" marginTop={2}>
         {helperElement}
+        {isHost && ownRole != null && (
+          <Button onClick={startTrial} fontSize="lg" marginTop={2}>
+            Start the trial
+          </Button>
+        )}
       </Flex>
       <Flex flexDirection="column" alignItems="center" marginTop={2}>
         <Text>THE EVIDENCE:</Text>

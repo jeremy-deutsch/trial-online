@@ -6,6 +6,7 @@ import "./App.css";
 import InitialScreen from "./components/InitialScreen";
 import WaitingScreen from "./components/WaitingScreen";
 import SidingScreen from "./components/SidingScreen";
+import TrialScreen from "./components/TrialScreen";
 
 export type SocketRef = React.RefObject<SocketIOClient.Socket | null>;
 
@@ -17,37 +18,47 @@ export enum Role {
 }
 
 const mockState: ClientState = {
-  type: "SIDING",
-  judgeName: "Cindy",
-  accusedName: "Mark",
-  crime: "Mark stole the Declaration of Independence!",
+  type: "TRIAL",
+  accusedName: "Livio",
+  crime: "Livio stole the Declaration of Independence!",
   evidence: ["Blood", "Hot dog", "Bad wifi", "Hailing", "Post-Its"],
   members: [
     {
       name: "Jeremy",
-      hasDecided: false,
+      role: Role.DEFENSE,
+      hasPresented: false,
+      evidence: ["Blood"],
     },
     {
       name: "Cindy",
-      hasDecided: true,
+      role: Role.JUDGE,
+      hasPresented: false,
+      evidence: [],
     },
     {
       name: "Mark",
-      hasDecided: true,
+      role: Role.PROSECUTION,
+      hasPresented: false,
+      evidence: ["Hot dog"],
     },
     {
       name: "Livio",
-      hasDecided: true,
+      role: Role.DEFENSE,
+      hasPresented: false,
+      evidence: ["Bad wifi"],
     },
     {
       name: "Zuoming",
-      hasDecided: false,
+      role: Role.PROSECUTION,
+      hasPresented: true,
+      evidence: ["Hailing"],
     },
   ],
-  ownRole: null,
+  currentWitness: "Mark",
+  nextWitness: "Livio",
   ownName: "Jeremy",
   roomCode: "OEK",
-  isHost: false,
+  isHost: true,
 };
 
 function App() {
@@ -71,6 +82,9 @@ function App() {
     }
     case "SIDING": {
       return <SidingScreen socketRef={socketRef} state={gameState} />;
+    }
+    case "TRIAL": {
+      return <TrialScreen socketRef={socketRef} state={gameState} />;
     }
     default: {
       return <div>ERROR: should not see this</div>;

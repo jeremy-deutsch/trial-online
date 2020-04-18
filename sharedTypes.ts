@@ -1,4 +1,7 @@
-export type ClientState = ClientWaitingState | ClientSidingState;
+export type ClientState =
+  | ClientWaitingState
+  | ClientSidingState
+  | ClientTrialState;
 
 export interface ClientWaitingState {
   type: "WAITING";
@@ -25,6 +28,24 @@ export interface ClientSidingState {
   roomCode: string;
   isHost: boolean;
   ownRole: Role | null;
+}
+
+export interface ClientTrialState {
+  type: "TRIAL";
+  accusedName: string;
+  members: Array<{
+    name: string;
+    evidence: string[];
+    role: Role;
+    hasPresented: boolean;
+  }>;
+  crime: string;
+  evidence: string[];
+  currentWitness: string;
+  nextWitness: string | null;
+  ownName: string;
+  roomCode: string;
+  isHost: boolean;
 }
 
 export interface JoinEvent {

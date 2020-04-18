@@ -5,7 +5,13 @@ import path from "path";
 
 import evidence from "./evidence.json";
 import crimes from "./crimes.json";
-import { ErrorResponse, ClientState, JoinEvent, Role } from "./sharedTypes";
+import {
+  ErrorResponse,
+  ClientState,
+  JoinEvent,
+  Role,
+  ClientTrialState,
+} from "./sharedTypes";
 
 const Express = express();
 const server = createServer(Express);
@@ -22,7 +28,10 @@ const noCodeError = error(
 const noRoomError = error("You don't have a room. This is probably a bug.");
 const notInRoomError = error("You aren't in the room. This is probably a bug.");
 
-type ServerRoomState = ServerWaitingState | ServerSidingState;
+type ServerRoomState =
+  | ServerWaitingState
+  | ServerSidingState
+  | ServerTrialState;
 
 interface ServerWaitingState {
   type: "WAITING";
@@ -38,6 +47,24 @@ interface ServerSidingState {
   evidence: number[];
   // TODO: maybe have some kind of "judge queue" so everyone gets to be a judge
   // at least once?
+  isRetry: boolean;
+}
+
+interface ServerTrialState {
+  type: "TRIAL";
+  members: Map<
+    string,
+    {
+      id: string;
+      isHost: boolean;
+      role: Role;
+      evidenceToPresent: number[];
+      hasPresented: boolean;
+    }
+  >;
+  crime: number;
+  defendant: string;
+  witnessQueue: string[];
 }
 
 const appState = new Map<string, ServerRoomState>();
@@ -90,6 +117,31 @@ function getClientRoomState(
         isHost,
       };
     }
+    case "TRIAL": {
+      const { defendant, witnessQueue, crime } = roomState;
+      const members: ClientTrialState["members"] = [];
+      let currentEvidence: string[] = [];
+      roomState.members.forEach(
+        ({ evidenceToPresent, role, hasPresented }, name) => {
+          const evidenceStrs = evidenceToPresent.map((i) => evidence[i]);
+          members.push({ name, evidence: evidenceStrs, role, hasPresented });
+          if (name === witnessQueue[0]) currentEvidence = evidenceStrs;
+        }
+      );
+      const isHost = !!roomState.members.get(memberName)?.isHost;
+      return {
+        type: "TRIAL",
+        crime: crimes[crime].replace(playernameRegex, defendant),
+        accusedName: defendant,
+        evidence: currentEvidence,
+        members,
+        currentWitness: witnessQueue[0],
+        nextWitness: witnessQueue[1] ?? null,
+        ownName: memberName,
+        roomCode,
+        isHost,
+      };
+    }
   }
 }
 
@@ -117,8 +169,20 @@ function joinRoom(roomCode: string, name: string, id: string) {
     return error("Room is full!");
   }
   const wasHost = !!roomState.members.get(name)?.isHost;
-  if (roomState.type === "WAITING") {
+  if (roomState.members.has(name)) {
+    return;
+  } else if (roomState.type === "WAITING") {
     roomState.members.set(name, { id, isHost: wasHost });
+  } else if (roomState.type === "TRIAL") {
+    roomState.members.set(name, {
+      id,
+      isHost: wasHost,
+      role: Role.JUDGE,
+      evidenceToPresent: [],
+      hasPresented: false,
+    });
+  } else {
+    return error("Room is choosing sides!");
   }
 }
 
@@ -131,18 +195,13 @@ function startChoosingSides(roomCode: string) {
   shuffleArray(memberLottery);
   const judgeName = memberLottery[0];
   const defendantName = memberLottery[1];
-  if (roomState.type === "SIDING") {
-    return error(
-      "You can't restart the round while users are choosing sides. What would that even do?"
-    );
-  } else {
-    roomState.members.forEach(({ id, isHost }, name) => {
-      let role: Role | null = null;
-      if (name === judgeName) role = Role.JUDGE;
-      else if (name === defendantName) role = Role.DEFENSE;
-      members.set(name, { id, isHost, role });
-    });
-  }
+  const isRetry = roomState.type === "SIDING";
+  roomState.members.forEach(({ id, isHost }, name) => {
+    let role: Role | null = null;
+    if (name === judgeName) role = Role.JUDGE;
+    else if (name === defendantName) role = Role.DEFENSE;
+    members.set(name, { id, isHost, role });
+  });
   const crime = Math.floor(Math.random() * crimes.length);
   // provide enough evidence for each person to get their own
   const evidenceIndices = new Set<number>();
@@ -157,6 +216,7 @@ function startChoosingSides(roomCode: string) {
     crime,
     defendant: defendantName,
     evidence: Array.from(evidenceIndices),
+    isRetry,
   };
   appState.set(roomCode, newState);
 }
@@ -180,6 +240,121 @@ function chooseRole(roomCode: string, name: string, role: Role) {
     return error("You already chose a role!");
   }
   member.role = role;
+}
+
+function startTrial(roomCode: string) {
+  const roomState = appState.get(roomCode);
+  if (!roomState) return noRoomError;
+  if (roomState.type !== "SIDING") {
+    return error("You can't start a trial from this game state!");
+  }
+
+  const members: ServerTrialState["members"] = new Map();
+  interface WitnessInfo {
+    name: string;
+    evidence: number[];
+  }
+  const witnesses: WitnessInfo[] = [];
+
+  roomState.members.forEach(({ id, isHost, role }, name) => {
+    members.set(name, {
+      id,
+      isHost,
+      role: role ?? Role.JUDGE,
+      hasPresented: false,
+      evidenceToPresent: [],
+    });
+    if (role === Role.DEFENSE || role === Role.PROSECUTION) {
+      witnesses.push({ name, evidence: [] });
+    }
+  });
+
+  shuffleArray(witnesses);
+  for (let i = 0; i < roomState.evidence.length; i++) {
+    witnesses[i]?.evidence.push(roomState.evidence[i]);
+  }
+  const prosecutionWitnesses = witnesses.filter(
+    ({ name }) => members.get(name)?.role === Role.PROSECUTION
+  );
+  const defenseWitnesses = witnesses.filter(
+    ({ name }) => members.get(name)?.role === Role.DEFENSE
+  );
+
+  if (!prosecutionWitnesses.length) {
+    // if there's no prosecution, we retry the whole thing!
+    return startChoosingSides(roomCode);
+  }
+
+  // explanation of the next block:
+  // if there are fewer witnesses on one side, we give the side with
+  // fewer witnesses some of the evidence from the side with more
+  // witnesses
+  shuffleArray(prosecutionWitnesses);
+  shuffleArray(defenseWitnesses);
+  const smallerWitnessArray =
+    defenseWitnesses.length > prosecutionWitnesses.length
+      ? prosecutionWitnesses
+      : defenseWitnesses;
+  const biggerWitnessArray =
+    defenseWitnesses.length > prosecutionWitnesses.length
+      ? defenseWitnesses
+      : prosecutionWitnesses;
+  for (
+    let i = 0;
+    i < biggerWitnessArray.length - smallerWitnessArray.length;
+    i++
+  ) {
+    smallerWitnessArray[i % smallerWitnessArray.length].evidence.push(
+      biggerWitnessArray[i].evidence[Math.floor(i / smallerWitnessArray.length)]
+    );
+  }
+
+  shuffleArray(biggerWitnessArray);
+  shuffleArray(smallerWitnessArray);
+  biggerWitnessArray.forEach((witness) => {
+    const member = members.get(witness.name);
+    if (member) {
+      member.evidenceToPresent = witness.evidence;
+    }
+  });
+  smallerWitnessArray.forEach((witness) => {
+    const member = members.get(witness.name);
+    if (member) {
+      member.evidenceToPresent = witness.evidence;
+    }
+  });
+
+  const witnessQueue = [...biggerWitnessArray, ...smallerWitnessArray].map(
+    (witness) => witness.name
+  );
+
+  const newState: ServerTrialState = {
+    type: "TRIAL",
+    members,
+    witnessQueue,
+    crime: roomState.crime,
+    defendant: roomState.defendant,
+  };
+  appState.set(roomCode, newState);
+}
+
+function callNextWitness(roomCode: string) {
+  const roomState = appState.get(roomCode);
+  if (!roomState) return noRoomError;
+  if (roomState.type !== "TRIAL") {
+    return error("The room isn't calling any witnesses right now.");
+  }
+  if (!roomState.witnessQueue.length) {
+    return error("There aren't any witnesses.");
+  }
+  if (roomState.witnessQueue.length === 1) {
+    return startChoosingSides(roomCode);
+  } else {
+    const currentWitnessName = roomState.witnessQueue[0];
+    const currentWitness = roomState.members.get(currentWitnessName);
+    if (currentWitness) currentWitness.hasPresented = true;
+    roomState.witnessQueue.shift();
+  }
 }
 
 io.on("connection", (socket) => {
@@ -251,6 +426,39 @@ io.on("connection", (socket) => {
       emitNewState();
     }
   );
+  socket.on("trial", (errCb: (error: ErrorResponse) => void) => {
+    if (!name) return errCb(noNameError);
+    if (!roomCode) return errCb(noCodeError);
+    const roomState = appState.get(roomCode);
+    if (!roomState) return errCb(noRoomError);
+    const memberInfo = roomState.members.get(name);
+    if (!memberInfo) return errCb(notInRoomError);
+    if (!memberInfo.isHost) {
+      return errCb(error("You aren't the host of this room."));
+    }
+
+    const maybeError = startTrial(roomCode);
+    if (maybeError) return errCb(maybeError);
+    emitNewState();
+  });
+  socket.on("witness", (errCb: (error: ErrorResponse) => void) => {
+    if (!name) return errCb(noNameError);
+    if (!roomCode) return errCb(noCodeError);
+    const roomState = appState.get(roomCode);
+    if (!roomState) return errCb(noRoomError);
+    if (roomState.type !== "TRIAL") {
+      return errCb(error("This room isn't in a trial."));
+    }
+    const memberInfo = roomState.members.get(name);
+    if (!memberInfo) return errCb(notInRoomError);
+    if (!memberInfo.isHost && memberInfo.role !== Role.JUDGE) {
+      return errCb(error("You can't call witnesses."));
+    }
+
+    const maybeError = callNextWitness(roomCode);
+    if (maybeError) return errCb(maybeError);
+    emitNewState();
+  });
 });
 
 // Serve static files from the React app
