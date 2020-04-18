@@ -36,6 +36,8 @@ interface ServerSidingState {
   defendant: string;
   crime: number;
   evidence: number[];
+  // TODO: maybe have some kind of "judge queue" so everyone gets to be a judge
+  // at least once?
 }
 
 const appState = new Map<string, ServerRoomState>();
@@ -74,6 +76,7 @@ function getClientRoomState(
         }
       });
       const isHost = !!roomState.members.get(memberName)?.isHost;
+      const ownRole = roomState.members.get(memberName)?.role ?? null;
       return {
         type: "SIDING",
         crime: crimes[roomState.crime].replace(playernameRegex, accusedName),
@@ -81,6 +84,7 @@ function getClientRoomState(
         members,
         judgeName,
         evidence: roomState.evidence.map((index) => evidence[index]),
+        ownRole,
         ownName: memberName,
         roomCode,
         isHost,

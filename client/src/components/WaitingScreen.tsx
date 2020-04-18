@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ClientWaitingState, ErrorResponse } from "../../../sharedTypes";
 import { SocketRef } from "../App";
 import { Flex, Text, Button, List, ListItem } from "@chakra-ui/core";
+import RoomCodeBox from "./RoomCodeBox";
 
 interface Props {
   state: ClientWaitingState;
@@ -24,14 +25,14 @@ export default function WaitingScreen(props: Props) {
       paddingLeft={[2, "25%"]}
       paddingRight={[2, "25%"]}
     >
-      <Flex flexDirection="column" alignSelf="center" alignItems="center">
-        <Text fontSize="md">Room Code</Text>
-        <Text fontSize="3xl" marginTop={0} as="h1">
-          {props.state.roomCode}
-        </Text>
-      </Flex>
+      <RoomCodeBox roomCode={props.state.roomCode} />
       {props.state.isHost && (
-        <Button onClick={startGame} marginTop={2} marginBottom={2}>
+        <Button
+          onClick={startGame}
+          isDisabled={props.state.memberNames.length < 4}
+          marginTop={2}
+          marginBottom={2}
+        >
           Start playing
         </Button>
       )}

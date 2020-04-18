@@ -24,6 +24,7 @@ export interface ClientSidingState {
   ownName: string;
   roomCode: string;
   isHost: boolean;
+  ownRole: Role | null;
 }
 
 export interface JoinEvent {
