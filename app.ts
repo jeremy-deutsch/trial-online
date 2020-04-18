@@ -169,7 +169,9 @@ function joinRoom(roomCode: string, name: string, id: string) {
     return error("Room is full!");
   }
   const wasHost = !!roomState.members.get(name)?.isHost;
-  if (roomState.members.has(name)) {
+  const oldMember = roomState.members.get(name);
+  if (oldMember) {
+    oldMember.id = id;
     return;
   } else if (roomState.type === "WAITING") {
     roomState.members.set(name, { id, isHost: wasHost });
