@@ -17,7 +17,6 @@ export default function TrialScreen(props: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const {
-    evidence,
     members,
     accusedName,
     nextWitness,
@@ -40,23 +39,38 @@ export default function TrialScreen(props: Props) {
     (member) => member.name === currentWitness
   );
   if (currentWitnessObj && currentWitnessObj.name === ownName) {
+    const evidencePhrase = getEvidencePhrase(
+      currentWitnessObj.evidence
+    ).toLowerCase();
+    // add an extra "actually" if the other side has presented
+    const extraActually =
+      currentWitnessObj.role !== members[0].role ? "actually " : "";
+    const nameText =
+      accusedName !== ownName ? `${accusedName} was ` : "you were ";
     helperElement = (
       <Text textAlign="center" marginTop={2}>
-        It's your turn! Present the{" "}
-        {getEvidencePhrase(currentWitnessObj.evidence).toLowerCase()} to show
-        that {accusedName} was{" "}
+        It's your turn! Explain how the {evidencePhrase} {extraActually}shows
+        that {nameText}
         {currentWitnessObj.role === Role.DEFENSE
-          ? "totally in the clear"
+          ? "in the clear"
           : "being a jerk"}
         .
       </Text>
     );
   } else if (currentWitnessObj) {
+    let referToAccused: string;
+    if (accusedName === currentWitness) {
+      referToAccused = "themselves";
+    } else if (accusedName === ownName) {
+      referToAccused = "your innocence";
+    } else {
+      referToAccused = accusedName;
+    }
     helperElement = (
       <Text textAlign="center" marginTop={2}>
         {currentWitness} is making their case{" "}
         {currentWitnessObj.role === Role.DEFENSE ? "for" : "against"}{" "}
-        {accusedName !== currentWitness ? accusedName : "themselves"}, with the{" "}
+        {referToAccused}, with the{" "}
         {getEvidencePhrase(currentWitnessObj.evidence).toLowerCase()} as
         evidence.
       </Text>
@@ -97,7 +111,11 @@ export default function TrialScreen(props: Props) {
       <Text textAlign="center" marginTop={2}>
         {nextWitness != null
           ? `Next up: ${nextWitness}`
-          : `When ${currentWitness} is done, it's deliberation!`}
+          : `When ${currentWitness} is done, it's deliberation!${
+              ownObj?.role === Role.JUDGE
+                ? " Make your decision about who's in the right before you end the trial."
+                : ""
+            }`}
       </Text>
       {!!nextWitnessWarning && (
         <Text textAlign="center" marginTop={2}>

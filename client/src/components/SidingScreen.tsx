@@ -30,17 +30,24 @@ export default function SidingScreen(props: Props) {
 
   if (ownName === accusedName) {
     helperElement = (
-      <Text textAlign="center">You're being accused! Who'll stand by you?</Text>
+      <Text textAlign="center">
+        You're being accused! Who'll stand by you? You'll be given some of the
+        evidence below to help make your case.
+      </Text>
     );
   } else if (ownName === judgeName) {
     helperElement = (
-      <Text textAlign="center">You're the judge. Try to be fair!</Text>
+      <Text textAlign="center">
+        You're the judge. You can call and dismiss witnesses, and make the final
+        verdict. Try to be fair!
+      </Text>
     );
   } else if (ownRole == null) {
     helperElement = (
       <>
         <Text textAlign="center">
           You're a witness. Will you stand with {accusedName} or against them?
+          You'll be given some of the evidence below to make your case.
         </Text>
         <Flex marginTop={2}>
           <Button
@@ -64,11 +71,11 @@ export default function SidingScreen(props: Props) {
   } else {
     helperElement = (
       <Text textAlign="center">
-        You've chosen to help{" "}
+        You're going to help{" "}
         {ownRole === Role.DEFENSE
           ? `defend ${accusedName}`
           : `bring ${accusedName} to justice`}
-        .
+        . You'll be given some of the evidence below to make your case.
       </Text>
     );
   }

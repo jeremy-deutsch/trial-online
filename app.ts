@@ -211,11 +211,13 @@ function startChoosingSides(roomCode: string) {
   shuffleArray(memberLottery);
   const judgeName = memberLottery[0];
   const defendantName = memberLottery[1];
+  const prosecutionName = memberLottery[2];
   const isRetry = roomState.type === "SIDING";
   roomState.members.forEach(({ id, isHost }, name) => {
     let role: Role | null = null;
     if (name === judgeName) role = Role.JUDGE;
     else if (name === defendantName) role = Role.DEFENSE;
+    else if (name === prosecutionName) role = Role.PROSECUTION;
     members.set(name, { id, isHost, role });
   });
   const crime = Math.floor(Math.random() * crimes.length);
