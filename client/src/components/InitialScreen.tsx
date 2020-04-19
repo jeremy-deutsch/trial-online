@@ -52,7 +52,7 @@ export default function InitialScreen(props: Props) {
           paddingLeft={[2, "25%"]}
         >
           <Text fontSize="3xl" alignSelf="center" marginTop={2} as="h1">
-            Name TBD
+            Jerk Trial
           </Text>
           <Flex flexDirection="column">
             <FormLabel>Name:</FormLabel>
