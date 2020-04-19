@@ -113,7 +113,7 @@ export default function TrialScreen(props: Props) {
           ? `Next up: ${nextWitness}`
           : `When ${currentWitness} is done, it's deliberation!${
               ownObj?.role === Role.JUDGE
-                ? " Make your decision about who's in the right before you end the trial."
+                ? " Make your decision about who's in the wrong before you end the trial."
                 : ""
             }`}
       </Text>

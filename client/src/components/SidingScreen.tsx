@@ -38,8 +38,8 @@ export default function SidingScreen(props: Props) {
   } else if (ownName === judgeName) {
     helperElement = (
       <Text textAlign="center">
-        You're the judge. You can call and dismiss witnesses, and make the final
-        verdict. Try to be fair!
+        You're the judge. You can call and dismiss witnesses, and decide if{" "}
+        {accusedName} is in the wrong. Try to be fair!
       </Text>
     );
   } else if (ownRole == null) {
