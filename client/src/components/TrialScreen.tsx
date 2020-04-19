@@ -105,6 +105,31 @@ export default function TrialScreen(props: Props) {
         </Text>
       )}
       {nextButtonElement}
+      {members.map(({ name, role, evidence: ownEvidence }) => (
+        <Flex
+          key={name}
+          borderWidth={1}
+          borderRadius={3}
+          paddingRight={2}
+          paddingLeft={3}
+          paddingTop={1}
+          paddingBottom={1}
+          marginTop={2}
+          flexDirection="column"
+          backgroundColor={getBackgroundColor(role)}
+        >
+          <Text fontSize="xl">
+            {name}
+            {props.state.ownName === name && " (you)"}
+          </Text>
+          <Text fontSize="sm">Role: {getRoleName(role)}</Text>
+          {!!ownEvidence.length && (
+            <Text fontSize="sm">
+              Evidence: {getEvidencePhrase(ownEvidence)}
+            </Text>
+          )}
+        </Flex>
+      ))}
     </Flex>
   );
 }
@@ -118,5 +143,26 @@ function getEvidencePhrase(evidence: string[]) {
       evidence.slice(0, -1).join(", ") +
       `, and ${evidence[evidence.length - 1]}`
     );
+  }
+}
+
+function getBackgroundColor(role: Role) {
+  if (role === Role.JUDGE) {
+    return "#e2e8f0";
+  } else if (role === Role.PROSECUTION) {
+    return "#feb2b2";
+  } else if (role === Role.DEFENSE) {
+    return "#f0fff4";
+  }
+}
+
+function getRoleName(role: Role) {
+  switch (role) {
+    case Role.DEFENSE:
+      return "Defense";
+    case Role.PROSECUTION:
+      return "Prosecution";
+    case Role.JUDGE:
+      return "Judge";
   }
 }

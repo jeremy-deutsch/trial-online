@@ -65,6 +65,7 @@ interface ServerTrialState {
   crime: number;
   defendant: string;
   witnessQueue: string[];
+  witnessOrder: string[];
 }
 
 const appState = new Map<string, ServerRoomState>();
@@ -118,16 +119,29 @@ function getClientRoomState(
       };
     }
     case "TRIAL": {
-      const { defendant, witnessQueue, crime } = roomState;
+      const { defendant, witnessQueue, witnessOrder, crime } = roomState;
+      const unusedMemberNames = new Set(roomState.members.keys());
       const members: ClientTrialState["members"] = [];
       let currentEvidence: string[] = [];
-      roomState.members.forEach(
-        ({ evidenceToPresent, role, hasPresented }, name) => {
+      for (const name of witnessOrder) {
+        const member = roomState.members.get(name);
+        if (member) {
+          unusedMemberNames.delete(name);
+          const { evidenceToPresent, role, hasPresented } = member;
           const evidenceStrs = evidenceToPresent.map((i) => evidence[i]);
           members.push({ name, evidence: evidenceStrs, role, hasPresented });
           if (name === witnessQueue[0]) currentEvidence = evidenceStrs;
         }
-      );
+      }
+      unusedMemberNames.forEach((name) => {
+        const member = roomState.members.get(name);
+        if (member) {
+          const { evidenceToPresent, role, hasPresented } = member;
+          const evidenceStrs = evidenceToPresent.map((i) => evidence[i]);
+          members.push({ name, evidence: evidenceStrs, role, hasPresented });
+          if (name === witnessQueue[0]) currentEvidence = evidenceStrs;
+        }
+      });
       const isHost = !!roomState.members.get(memberName)?.isHost;
       return {
         type: "TRIAL",
@@ -271,10 +285,6 @@ function startTrial(roomCode: string) {
     }
   });
 
-  shuffleArray(witnesses);
-  for (let i = 0; i < roomState.evidence.length; i++) {
-    witnesses[i]?.evidence.push(roomState.evidence[i]);
-  }
   const prosecutionWitnesses = witnesses.filter(
     ({ name }) => members.get(name)?.role === Role.PROSECUTION
   );
@@ -287,53 +297,40 @@ function startTrial(roomCode: string) {
     return startChoosingSides(roomCode);
   }
 
-  // explanation of the next block:
-  // if there are fewer witnesses on one side, we give the side with
-  // fewer witnesses some of the evidence from the side with more
-  // witnesses
   shuffleArray(prosecutionWitnesses);
   shuffleArray(defenseWitnesses);
-  const smallerWitnessArray =
-    defenseWitnesses.length > prosecutionWitnesses.length
-      ? prosecutionWitnesses
-      : defenseWitnesses;
-  const biggerWitnessArray =
-    defenseWitnesses.length > prosecutionWitnesses.length
-      ? defenseWitnesses
-      : prosecutionWitnesses;
-  for (
-    let i = 0;
-    i < biggerWitnessArray.length - smallerWitnessArray.length;
-    i++
-  ) {
-    smallerWitnessArray[i % smallerWitnessArray.length].evidence.push(
-      biggerWitnessArray[i].evidence[Math.floor(i / smallerWitnessArray.length)]
+  for (let i = 0; i < roomState.evidence.length; i++) {
+    prosecutionWitnesses[i % prosecutionWitnesses.length]?.evidence.push(
+      roomState.evidence[i]
+    );
+    defenseWitnesses[i % defenseWitnesses.length]?.evidence.push(
+      roomState.evidence[i]
     );
   }
 
-  shuffleArray(biggerWitnessArray);
-  shuffleArray(smallerWitnessArray);
-  biggerWitnessArray.forEach((witness) => {
+  shuffleArray(prosecutionWitnesses);
+  shuffleArray(defenseWitnesses);
+
+  let orderedWitnesses: WitnessInfo[];
+  if (defenseWitnesses.length > prosecutionWitnesses.length) {
+    orderedWitnesses = defenseWitnesses.concat(prosecutionWitnesses);
+  } else {
+    orderedWitnesses = prosecutionWitnesses.concat(defenseWitnesses);
+  }
+
+  orderedWitnesses.forEach((witness) => {
     const member = members.get(witness.name);
-    if (member) {
-      member.evidenceToPresent = witness.evidence;
-    }
-  });
-  smallerWitnessArray.forEach((witness) => {
-    const member = members.get(witness.name);
-    if (member) {
-      member.evidenceToPresent = witness.evidence;
-    }
+    if (member) member.evidenceToPresent = witness.evidence;
   });
 
-  const witnessQueue = [...biggerWitnessArray, ...smallerWitnessArray].map(
-    (witness) => witness.name
-  );
+  const witnessQueue = orderedWitnesses.map((witness) => witness.name);
+  const witnessOrder = Array.from(witnessQueue);
 
   const newState: ServerTrialState = {
     type: "TRIAL",
     members,
     witnessQueue,
+    witnessOrder,
     crime: roomState.crime,
     defendant: roomState.defendant,
   };
